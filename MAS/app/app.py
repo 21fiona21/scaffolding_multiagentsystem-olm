@@ -52,7 +52,10 @@ def init_session_state():
         "conversation_turn": 0,
         "conversation_history": {},
         "agent_msg": None,
-        "show_tutorial": False
+        "show_tutorial": False,
+        "olm_dashboard_pending": False,
+        "olm_snapshot": None,
+        "olm_metrics_by_round": {},  # metrics cached at submit time per round
     }
 
     for key, value in defaults.items():
@@ -817,6 +820,78 @@ def render_concept_map():
     return response
 
 
+# ---------------------------------------------------------------------------
+# OLM (Open Learner Model) condition helpers
+# ---------------------------------------------------------------------------
+
+def is_olm_condition() -> bool:
+    """Return True when the current session is in the OLM experimental condition."""
+    exp = st.session_state.experimental_session
+    if exp:
+        return exp.session_data.get("experimental_condition") == "OLM"
+    return False
+
+
+def compute_olm_metrics(roundn: int) -> dict:
+    """Return cached OLM metrics for the given round.
+
+    Metrics are stored in olm_metrics_by_round at submit time (inside handle_response),
+    so they are always based on the freshly submitted component data.
+    """
+    by_round = st.session_state.get("olm_metrics_by_round", {})
+    if roundn in by_round:
+        return by_round[roundn]
+    # Fallback: return zeros (should not happen if OLM condition is active)
+    return {"node_count": 0, "edge_count": 0, "connectivity_ratio": 0.0, "isolated_count": 0}
+
+
+def render_olm_dashboard(roundn: int) -> None:
+    """Render the Open Learner Model dashboard between rounds (OLM condition only)."""
+    st.markdown("---")
+    st.subheader("Your Concept Map — Key Metrics")
+    st.caption(f"Round {roundn} snapshot (as submitted)")
+
+    m = compute_olm_metrics(roundn)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(
+        label="Number of Concepts",
+        value=m["node_count"],
+        help="The total number of concepts currently included in your concept map.",
+    )
+    col2.metric(
+        label="Number of Connections",
+        value=m["edge_count"],
+        help="The total number of connections linking concepts in your map.",
+    )
+    col3.metric(
+        label="Connectivity",
+        value=m["connectivity_ratio"],
+        help="The ratio of connections to concepts, indicating how strongly concepts are linked.",
+    )
+    col4.metric(
+        label="Unconnected Concepts",
+        value=m["isolated_count"],
+        help="The number of concepts that are not connected to any other concept.",
+    )
+
+    st.markdown("---")
+    _, col_btn, _ = st.columns([1, 2, 1])
+    with col_btn:
+        next_label = "Proceed to Round 1" if roundn == 0 else "Proceed to Next Round"
+        if st.button(next_label, type="primary", use_container_width=True,
+                     key=f"olm_proceed_r{roundn}"):
+            st.session_state.olm_dashboard_pending = False
+            st.session_state.olm_snapshot = None
+            st.session_state.followup = False
+            st.session_state.roundn = 1 if roundn == 0 else st.session_state.roundn + 1
+            st.session_state.agent_msg = None
+            st.session_state.scroll_to_top = True
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
+
 def render_cm_submit_button():
     """Render concept map submit button."""
     st.markdown("---")  # Add a separator
@@ -840,7 +915,12 @@ def render_followup():
     """Render agent followup interaction with multi-turn conversation support."""
     roundn = st.session_state.roundn
 
-    # Special handling for Round 0 - skip directly to Round 1
+    # OLM condition: show dashboard instead of the normal round-advance
+    if st.session_state.get("olm_dashboard_pending", False):
+        render_olm_dashboard(roundn)
+        return
+
+    # Special handling for Round 0 - skip directly to Round 1 (no OLM dashboard for baseline round)
     if roundn == 0:
         st.success("✅ Initial concept map submitted successfully!")
         st.info("This was your baseline concept map (Round 0). Now let's proceed with agent-guided experiment.")
@@ -848,9 +928,6 @@ def render_followup():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("Proceed to Round 1", type="primary", use_container_width=True):
-                # Log the round 0 completion
-                if st.session_state.experimental_session:
-                    current_cm_data = st.session_state.cmdata[0] if len(st.session_state.cmdata) > 0 else None
                 # Log the round 0 completion with experimental session
                 if st.session_state.experimental_session:
                     current_cm_data = st.session_state.cmdata[0] if len(st.session_state.cmdata) > 0 else None
@@ -1001,12 +1078,19 @@ def render_followup():
                 # Reset conversation state for next round
                 st.session_state[conversation_turn_key] = 0
 
-                # Move to next round
-                st.session_state.followup = False
-                st.session_state.roundn += 1
-                st.session_state.agent_msg = None
-                st.session_state.scroll_to_top = True
-                st.rerun()
+                if is_olm_condition():
+                    # OLM: capture snapshot now (while cmdata[roundn] is guaranteed correct)
+                    # then show dashboard before advancing to next round
+                    st.session_state.olm_snapshot = copy.deepcopy(current_cm_data)
+                    st.session_state.olm_dashboard_pending = True
+                    st.rerun()
+                else:
+                    # Move to next round
+                    st.session_state.followup = False
+                    st.session_state.roundn += 1
+                    st.session_state.agent_msg = None
+                    st.session_state.scroll_to_top = True
+                    st.rerun()
 
         with col3:
             # Show conversation limits
@@ -1256,6 +1340,22 @@ def handle_response(response):
         # Update the current round's concept map with the new data
         st.session_state.cmdata[roundn] = response
         logger.info(f"   📝 Stored response in cmdata[{roundn}]")
+
+        # OLM: cache metrics immediately while response is guaranteed fresh from the component
+        if is_olm_condition():
+            _parsed = parse_conceptmap(response)
+            _concepts = _parsed.get("concepts", [])
+            _rels = _parsed.get("relationships", [])
+            _connected = set()
+            for _r in _rels:
+                _connected.add(_r.get("source", ""))
+                _connected.add(_r.get("target", ""))
+            st.session_state.olm_metrics_by_round[roundn] = {
+                "node_count": len(_concepts),
+                "edge_count": len(_rels),
+                "connectivity_ratio": round(len(_rels) / max(1, len(_concepts)), 2),
+                "isolated_count": sum(1 for _c in _concepts if _c.get("id", "") not in _connected),
+            }
 
         # Debug: Show what we're storing
         if isinstance(response, dict) and "elements" in response:

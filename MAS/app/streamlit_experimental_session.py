@@ -43,13 +43,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Experimental conditions for balanced assignment
-EXPERIMENTAL_CONDITIONS = ['EG_SEQ', 'CG_WRONG_SEQ', 'CG_NEUTRAL']
+EXPERIMENTAL_CONDITIONS = ['EG_SEQ', 'CG_WRONG_SEQ', 'CG_NEUTRAL', 'OLM']
 
 # Agent sequences for each experimental condition
 AGENT_SEQUENCES = {
     'EG_SEQ': ["conceptual_scaffolding", "procedural_scaffolding", "strategic_scaffolding", "metacognitive_scaffolding"],
     'CG_WRONG_SEQ': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
-    'CG_NEUTRAL': ["neutral", "neutral", "neutral", "neutral"]
+    'CG_NEUTRAL': ["neutral", "neutral", "neutral", "neutral"],
+    # OLM condition: same agent sequence as CG_WRONG_SEQ, but with OLM dashboard shown after each round
+    'OLM': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
 }
 
 
@@ -417,32 +419,32 @@ class StreamlitExperimentalSession:
                 "statement": "Because of the design of the learning material, I had the impression that I could not concentrate on the learning content."
             },
             
-            # Germane Cognitive Load (GCL)
-            {
-                "construct": "GCL",
-                "code": "GCL1",
-                "statement": "I actively reflected upon the learning content."
-            },
-            {
-                "construct": "GCL",
-                "code": "GCL3",
-                "statement": "I made an effort to understand the learning content."
-            },
-            {
-                "construct": "GCL",
-                "code": "GCL5",
-                "statement": "I achieved a comprehensive understanding of the learning content."
-            },
-            {
-                "construct": "GCL",
-                "code": "GCL6",
-                "statement": "I was able to expand my prior knowledge with the learning content."
-            },
-            {
-                "construct": "GCL",
-                "code": "GCL7",
-                "statement": "I can apply the knowledge that I acquired through the learning material quickly and accurately."
-            }
+            # Germane Cognitive Load (GCL) — temporarily disabled
+            # {
+            #     "construct": "GCL",
+            #     "code": "GCL1",
+            #     "statement": "I actively reflected upon the learning content."
+            # },
+            # {
+            #     "construct": "GCL",
+            #     "code": "GCL3",
+            #     "statement": "I made an effort to understand the learning content."
+            # },
+            # {
+            #     "construct": "GCL",
+            #     "code": "GCL5",
+            #     "statement": "I achieved a comprehensive understanding of the learning content."
+            # },
+            # {
+            #     "construct": "GCL",
+            #     "code": "GCL6",
+            #     "statement": "I was able to expand my prior knowledge with the learning content."
+            # },
+            # {
+            #     "construct": "GCL",
+            #     "code": "GCL7",
+            #     "statement": "I can apply the knowledge that I acquired through the learning material quickly and accurately."
+            # }
         ]
         # Add random attention check item
         attention_check_item = {
@@ -501,7 +503,7 @@ class StreamlitExperimentalSession:
                 
                 # Calculate construct averages
                 construct_scores = {}
-                for construct in ["ICL", "ECL", "GCL"]:
+                for construct in ["ICL", "ECL"]:  # GCL temporarily disabled
                     construct_items = [r for r in responses.values() if r['construct'] == construct]
                     if construct_items:
                         avg_score = sum(item['response_value'] for item in construct_items) / len(construct_items)
@@ -982,39 +984,40 @@ class StreamlitExperimentalSession:
     def assign_experimental_condition(self) -> str:
         """
         Assign experimental condition using deterministic balanced assignment.
-        
+
         Returns:
             Assigned experimental condition (EG_SEQ, CG_WRONG_SEQ, or CG_NEUTRAL)
         """
         # Check if condition already assigned
         if "experimental_condition" in self.session_data:
             return self.session_data["experimental_condition"]
-        
-        # Use session ID for deterministic balanced assignment
-        session_id = self.session_data["session_id"]
-        
-        # Convert to number and mod by 3 for balanced distribution
-        hash_value = int(hashlib.md5(session_id.encode()).hexdigest(), 16)
-        condition_index = hash_value % 3
-        
-        assigned_condition = EXPERIMENTAL_CONDITIONS[condition_index]
-        
+
+        # FIXED: Always use EG_SEQ (correct agent sequence) for all sessions.
+        # Random/balanced assignment across conditions is commented out below.
+        assigned_condition = 'OLM'  # TEMP: set to 'CG_WRONG_SEQ' to revert to baseline
+
+        # # Use session ID for deterministic balanced assignment
+        # session_id = self.session_data["session_id"]
+        # # Convert to number and mod by 3 for balanced distribution
+        # hash_value = int(hashlib.md5(session_id.encode()).hexdigest(), 16)
+        # condition_index = hash_value % 3
+        # assigned_condition = EXPERIMENTAL_CONDITIONS[condition_index]
+
         # Store in session data
         self.session_data["experimental_condition"] = assigned_condition
-        
+
         # Log the assignment
         if self.session_logger:
             self.session_logger.log_event(
                 event_type="experimental_condition_assigned",
                 metadata={
                     "experimental_condition": assigned_condition,
-                    "session_id": session_id,
-                    "assignment_method": "deterministic_hash",
-                    "condition_index": condition_index,
+                    "session_id": self.session_data["session_id"],
+                    "assignment_method": "fixed_EG_SEQ",
                     "timestamp": datetime.now().isoformat()
                 }
             )
-        
+
         logger.info(f"Assigned experimental condition: {assigned_condition}")
         return assigned_condition
     
