@@ -43,15 +43,17 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Experimental conditions for balanced assignment
-EXPERIMENTAL_CONDITIONS = ['EG_SEQ', 'CG_WRONG_SEQ', 'CG_NEUTRAL', 'OLM']
+EXPERIMENTAL_CONDITIONS = ['EG_SEQ', 'CG_WRONG_SEQ', 'CG_NEUTRAL', 'OLM_dashboard', 'OLM_no_dashboard']
 
 # Agent sequences for each experimental condition
 AGENT_SEQUENCES = {
     'EG_SEQ': ["conceptual_scaffolding", "procedural_scaffolding", "strategic_scaffolding", "metacognitive_scaffolding"],
     'CG_WRONG_SEQ': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
     'CG_NEUTRAL': ["neutral", "neutral", "neutral", "neutral"],
-    # OLM condition: same agent sequence as CG_WRONG_SEQ, but with OLM dashboard shown after each round
-    'OLM': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
+    # OLM_dashboard: scaffolding + OLM dashboard shown after each round
+    'OLM_dashboard': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
+    # OLM_no_dashboard: same scaffolding, no dashboard shown
+    'OLM_no_dashboard': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
 }
 
 
@@ -222,9 +224,19 @@ class StreamlitExperimentalSession:
                     "C": "Incumbent firms adapt rules and networks to make entry harder for competitors"
                 },
                 "correct": "C"
+            },
+            {
+                "id": "amg_mechanisms",
+                "question": "AMG Mechanisms: Which Mechanisms are typically used in AMG?",
+                "options": {
+                    "A": "Regulatory compliance, quality assurance, performance monitoring",
+                    "B": "Patent acquisition, intellectual property protection, technology licensing",
+                    "C": "Dynamic adaptation, network control, resource blocking"
+                },
+                "correct": "C"
             }
         ]
-        
+
         with st.form("pre_knowledge_questionnaire"):
             responses = {}
             
@@ -419,32 +431,31 @@ class StreamlitExperimentalSession:
                 "statement": "Because of the design of the learning material, I had the impression that I could not concentrate on the learning content."
             },
             
-            # Germane Cognitive Load (GCL) — temporarily disabled
-            # {
-            #     "construct": "GCL",
-            #     "code": "GCL1",
-            #     "statement": "I actively reflected upon the learning content."
-            # },
-            # {
-            #     "construct": "GCL",
-            #     "code": "GCL3",
-            #     "statement": "I made an effort to understand the learning content."
-            # },
-            # {
-            #     "construct": "GCL",
-            #     "code": "GCL5",
-            #     "statement": "I achieved a comprehensive understanding of the learning content."
-            # },
-            # {
-            #     "construct": "GCL",
-            #     "code": "GCL6",
-            #     "statement": "I was able to expand my prior knowledge with the learning content."
-            # },
-            # {
-            #     "construct": "GCL",
-            #     "code": "GCL7",
-            #     "statement": "I can apply the knowledge that I acquired through the learning material quickly and accurately."
-            # }
+            {
+                "construct": "GCL",
+                "code": "GCL1",
+                "statement": "I actively reflected upon the learning content."
+            },
+            {
+                "construct": "GCL",
+                "code": "GCL3",
+                "statement": "I made an effort to understand the learning content."
+            },
+            {
+                "construct": "GCL",
+                "code": "GCL5",
+                "statement": "I achieved a comprehensive understanding of the learning content."
+            },
+            {
+                "construct": "GCL",
+                "code": "GCL6",
+                "statement": "I was able to expand my prior knowledge with the learning content."
+            },
+            {
+                "construct": "GCL",
+                "code": "GCL7",
+                "statement": "I can apply the knowledge that I acquired through the learning material quickly and accurately."
+            }
         ]
         # Add random attention check item
         attention_check_item = {
@@ -503,7 +514,7 @@ class StreamlitExperimentalSession:
                 
                 # Calculate construct averages
                 construct_scores = {}
-                for construct in ["ICL", "ECL"]:  # GCL temporarily disabled
+                for construct in ["ICL", "ECL", "GCL"]:
                     construct_items = [r for r in responses.values() if r['construct'] == construct]
                     if construct_items:
                         avg_score = sum(item['response_value'] for item in construct_items) / len(construct_items)
@@ -561,11 +572,12 @@ class StreamlitExperimentalSession:
                 
                 # Update session state to mark CLT as completed
                 st.session_state.clt_completed = True
-                
+                st.session_state.scroll_to_top = True
+
                 st.success("✅ Cognitive Load questionnaire completed!")
-                st.info("📊 Proceeding to the Post Knowledge questionnaire...")
-                
-                # Automatically proceed to post knowledge
+                st.info("📊 Proceeding to the System Usability Scale questionnaire...")
+
+                # Automatically proceed
                 st.rerun()
                 
 
@@ -651,6 +663,16 @@ class StreamlitExperimentalSession:
                     "A": "Governments guarantee fair access for every new entrant",
                     "B": "Start-ups gain automatic advantages over established firms as an incentive",
                     "C": "Incumbent firms adapt rules and networks to make entry harder for competitors"
+                },
+                "correct": "C"
+            },
+            {
+                "id": "amg_mechanisms",
+                "question": "AMG Mechanisms: Which Mechanisms are typically used in AMG?",
+                "options": {
+                    "A": "Regulatory compliance, quality assurance, performance monitoring",
+                    "B": "Patent acquisition, intellectual property protection, technology licensing",
+                    "C": "Dynamic adaptation, network control, resource blocking"
                 },
                 "correct": "C"
             }
@@ -747,6 +769,122 @@ class StreamlitExperimentalSession:
                 st.rerun()
 
     
+    def render_sus_questionnaire(self):
+        """Render the System Usability Scale (SUS) questionnaire."""
+        import streamlit as st
+
+        st.header("📱 System Usability Scale")
+        st.markdown("---")
+
+        st.info(
+            """
+            Please rate your agreement with each statement about the system you just used.
+            """
+        )
+
+        sus_items = [
+            {"code": "SUS1",  "position": "odd",  "statement": "I think that I would like to use this system frequently."},
+            {"code": "SUS2",  "position": "even", "statement": "I found the system unnecessarily complex."},
+            {"code": "SUS3",  "position": "odd",  "statement": "I thought the system was easy to use."},
+            {"code": "SUS4",  "position": "even", "statement": "I think that I would need the support of a technical person to be able to use this system."},
+            {"code": "SUS5",  "position": "odd",  "statement": "I found the various functions in this system were well integrated."},
+            {"code": "SUS6",  "position": "even", "statement": "I thought there was too much inconsistency in this system."},
+            {"code": "SUS7",  "position": "odd",  "statement": "I would imagine that most people would learn to use this system very quickly."},
+            {"code": "SUS8",  "position": "even", "statement": "I found the system very cumbersome to use."},
+            {"code": "SUS9",  "position": "odd",  "statement": "I felt very confident using the system."},
+            {"code": "SUS10", "position": "even", "statement": "I needed to learn a lot of things before I could get going with this system."},
+        ]
+
+        with st.form("sus_questionnaire"):
+            responses = {}
+
+            for i, item in enumerate(sus_items, 1):
+                st.markdown(f"**Statement {i} of {len(sus_items)}**")
+                st.markdown(item["statement"])
+
+                col_left, col_scale, col_right = st.columns([2, 4, 2])
+                with col_left:
+                    st.markdown("<div style='text-align:right; padding-top:8px'>Strongly disagree</div>", unsafe_allow_html=True)
+                with col_scale:
+                    value = st.radio(
+                        label=item["statement"],
+                        options=[1, 2, 3, 4, 5],
+                        format_func=str,
+                        horizontal=True,
+                        index=None,
+                        key=f"sus_{item['code']}",
+                        label_visibility="collapsed"
+                    )
+                with col_right:
+                    st.markdown("<div style='text-align:left; padding-top:8px'>Strongly agree</div>", unsafe_allow_html=True)
+
+                if value is not None:
+                    responses[item["code"]] = {
+                        "statement": item["statement"],
+                        "response_value": value,
+                        "position": item["position"],
+                        "item_order": i
+                    }
+
+                st.markdown("---")
+
+            submitted = st.form_submit_button("Submit Questionnaire", type="primary")
+
+            if submitted:
+                if len(responses) < len(sus_items):
+                    st.error(f"Please answer all {len(sus_items)} statements before submitting.")
+                    return
+
+                # Standard SUS scoring formula (produces 0–100 score)
+                # Odd items: response - 1; Even items: 5 - response; sum * 2.5
+                score_sum = 0
+                for code, r in responses.items():
+                    if r["position"] == "odd":
+                        score_sum += r["response_value"] - 1
+                    else:
+                        score_sum += 5 - r["response_value"]
+                sus_score = round(score_sum * 2.5, 2)
+
+                sus_data = {
+                    "responses": responses,
+                    "sus_score": sus_score,
+                    "participant_id": self.session_data.get("learner_profile", {}).get("name", "unknown"),
+                    "unique_id": self.session_data.get("learner_profile", {}).get("unique_id", "N/A"),
+                    "timestamp": datetime.now().isoformat()
+                }
+
+                self.session_data["sus_questionnaire"] = sus_data
+
+                if self.session_logger:
+                    # Summary event
+                    self.session_logger.log_event(
+                        event_type="sus_questionnaire_completed",
+                        metadata={
+                            "sus_score": sus_score,
+                            "total_items": len(responses),
+                            "participant_id": sus_data["participant_id"],
+                            "unique_id": sus_data["unique_id"]
+                        }
+                    )
+                    # Individual item events
+                    for code, r in responses.items():
+                        self.session_logger.log_event(
+                            event_type="sus_item_response",
+                            metadata={
+                                "participant_id": sus_data["participant_id"],
+                                "unique_id": sus_data["unique_id"],
+                                "timestamp": sus_data["timestamp"],
+                                "item_code": code,
+                                "response_value": r["response_value"],
+                                "statement": r["statement"],
+                                "item_order": r["item_order"]
+                            }
+                        )
+
+                st.session_state.sus_completed = True
+                st.success("✅ Questionnaire completed! Thank you for your responses.")
+                st.rerun()
+
     def create_learner_profile_form(self) -> Dict[str, Any]:
         """Create learner profile through Streamlit form."""
         st.header("Learner Profile Creation")
@@ -992,15 +1130,13 @@ class StreamlitExperimentalSession:
         if "experimental_condition" in self.session_data:
             return self.session_data["experimental_condition"]
 
-        # FIXED: Always use EG_SEQ (correct agent sequence) for all sessions.
-        # Random/balanced assignment across conditions is commented out below.
-        assigned_condition = 'OLM'  # TEMP: set to 'CG_WRONG_SEQ' to revert to baseline
+        # Randomly assign between OLM_dashboard and OLM_no_dashboard
+        assigned_condition = random.choice(['OLM_dashboard', 'OLM_no_dashboard'])
 
-        # # Use session ID for deterministic balanced assignment
+        # # Use session ID for deterministic balanced assignment across all conditions
         # session_id = self.session_data["session_id"]
-        # # Convert to number and mod by 3 for balanced distribution
         # hash_value = int(hashlib.md5(session_id.encode()).hexdigest(), 16)
-        # condition_index = hash_value % 3
+        # condition_index = hash_value % len(EXPERIMENTAL_CONDITIONS)
         # assigned_condition = EXPERIMENTAL_CONDITIONS[condition_index]
 
         # Store in session data
@@ -1013,7 +1149,7 @@ class StreamlitExperimentalSession:
                 metadata={
                     "experimental_condition": assigned_condition,
                     "session_id": self.session_data["session_id"],
-                    "assignment_method": "fixed_EG_SEQ",
+                    "assignment_method": "random_olm_split",
                     "timestamp": datetime.now().isoformat()
                 }
             )

@@ -46,6 +46,7 @@ def init_session_state():
         "profile_initialized": False,
         "pre_questionnaire_completed": False,
         "clt_completed": False,
+        "sus_completed": False,
         "post_questionnaire_completed": False,
         "session_finalized": False,
         "tutorial_completed": False,
@@ -56,6 +57,7 @@ def init_session_state():
         "olm_dashboard_pending": False,
         "olm_snapshot": None,
         "olm_metrics_by_round": {},  # metrics cached at submit time per round
+        "olm_dashboard_shown_time": None,
     }
 
     for key, value in defaults.items():
@@ -800,8 +802,10 @@ def render_concept_map():
             # Ensure we have valid concept map data
             if roundn < len(st.session_state.cmdata) and isinstance(st.session_state.cmdata[roundn], dict):
                 cm_data = st.session_state.cmdata[roundn]
+            elif roundn > 0 and len(st.session_state.cmdata) >= roundn and isinstance(st.session_state.cmdata[roundn - 1], dict):
+                # Start new round from previous round's map to preserve user edits
+                cm_data = st.session_state.cmdata[roundn - 1]
             else:
-                # Use initial map if we don't have data for this round
                 cm_data = st.session_state.contents["initial_map"]
 
             # Debug: Check data type before passing to component
@@ -825,10 +829,18 @@ def render_concept_map():
 # ---------------------------------------------------------------------------
 
 def is_olm_condition() -> bool:
-    """Return True when the current session is in the OLM experimental condition."""
+    """Return True for any OLM condition (dashboard or no-dashboard)."""
     exp = st.session_state.experimental_session
     if exp:
-        return exp.session_data.get("experimental_condition") == "OLM"
+        return exp.session_data.get("experimental_condition") in ("OLM_dashboard", "OLM_no_dashboard")
+    return False
+
+
+def is_olm_dashboard_condition() -> bool:
+    """Return True only when the dashboard should be shown (OLM_dashboard condition)."""
+    exp = st.session_state.experimental_session
+    if exp:
+        return exp.session_data.get("experimental_condition") == "OLM_dashboard"
     return False
 
 
@@ -847,7 +859,17 @@ def compute_olm_metrics(roundn: int) -> dict:
 
 def render_olm_dashboard(roundn: int) -> None:
     """Render the Open Learner Model dashboard between rounds (OLM condition only)."""
-    st.markdown("---")
+    # Log when the dashboard is first shown for this visit
+    if st.session_state.get("olm_dashboard_shown_time") is None:
+        shown_time = datetime.now().isoformat()
+        st.session_state.olm_dashboard_shown_time = shown_time
+        session = st.session_state.get("experimental_session")
+        if session and session.session_logger:
+            session.session_logger.log_event(
+                event_type="olm_dashboard_shown",
+                metadata={"round": roundn, "timestamp": shown_time}
+            )
+
     st.subheader("Your Concept Map — Key Metrics")
     st.caption(f"Round {roundn} snapshot (as submitted)")
 
@@ -878,9 +900,41 @@ def render_olm_dashboard(roundn: int) -> None:
     st.markdown("---")
     _, col_btn, _ = st.columns([1, 2, 1])
     with col_btn:
-        next_label = "Proceed to Round 1" if roundn == 0 else "Proceed to Next Round"
+        if roundn == 0:
+            next_label = "Proceed to Round 1"
+        elif roundn >= st.session_state.max_rounds - 1:
+            next_label = "Proceed"
+        else:
+            next_label = "Proceed to Next Round"
         if st.button(next_label, type="primary", use_container_width=True,
                      key=f"olm_proceed_r{roundn}"):
+            # Log how long the participant stayed on the dashboard
+            dismissed_time = datetime.now().isoformat()
+            shown_time = st.session_state.get("olm_dashboard_shown_time")
+            duration_seconds = None
+            if shown_time:
+                duration_seconds = round(
+                    (datetime.fromisoformat(dismissed_time) - datetime.fromisoformat(shown_time)).total_seconds(), 2
+                )
+            session = st.session_state.get("experimental_session")
+            if session and session.session_logger:
+                session.session_logger.log_event(
+                    event_type="olm_dashboard_dismissed",
+                    metadata={
+                        "round": roundn,
+                        "timestamp": dismissed_time,
+                        "shown_time": shown_time,
+                        "duration_seconds": duration_seconds
+                    }
+                )
+            # For round 0, log completion before advancing
+            if roundn == 0 and st.session_state.experimental_session:
+                current_cm_data = st.session_state.cmdata[0] if len(st.session_state.cmdata) > 0 else None
+                st.session_state.experimental_session.update_concept_map_evolution(0, current_cm_data)
+                st.session_state.experimental_session.add_to_conversation_history(
+                    0, "system", "Round 0 completed - baseline concept map created", {"final": True}
+                )
+            st.session_state.olm_dashboard_shown_time = None
             st.session_state.olm_dashboard_pending = False
             st.session_state.olm_snapshot = None
             st.session_state.followup = False
@@ -915,34 +969,33 @@ def render_followup():
     """Render agent followup interaction with multi-turn conversation support."""
     roundn = st.session_state.roundn
 
-    # OLM condition: show dashboard instead of the normal round-advance
-    if st.session_state.get("olm_dashboard_pending", False):
-        render_olm_dashboard(roundn)
-        return
-
-    # Special handling for Round 0 - skip directly to Round 1 (no OLM dashboard for baseline round)
+    # Special handling for Round 0 - show OLM dashboard (OLM_dashboard condition) or skip directly to Round 1
     if roundn == 0:
-        st.success("✅ Initial concept map submitted successfully!")
-        st.info("This was your baseline concept map (Round 0). Now let's proceed with agent-guided experiment.")
+        if is_olm_dashboard_condition():
+            st.session_state.olm_dashboard_pending = True
+            st.rerun()
+        else:
+            st.success("✅ Initial concept map submitted successfully!")
+            st.info("This was your baseline concept map (Round 0). Now let's proceed with agent-guided experiment.")
 
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("Proceed to Round 1", type="primary", use_container_width=True):
-                # Log the round 0 completion with experimental session
-                if st.session_state.experimental_session:
-                    current_cm_data = st.session_state.cmdata[0] if len(st.session_state.cmdata) > 0 else None
-                    st.session_state.experimental_session.update_concept_map_evolution(0, current_cm_data)
-                    st.session_state.experimental_session.add_to_conversation_history(
-                        0, "system", "Round 0 completed - baseline concept map created", {"final": True}
-                    )
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("Proceed to Round 1", type="primary", use_container_width=True):
+                    # Log the round 0 completion with experimental session
+                    if st.session_state.experimental_session:
+                        current_cm_data = st.session_state.cmdata[0] if len(st.session_state.cmdata) > 0 else None
+                        st.session_state.experimental_session.update_concept_map_evolution(0, current_cm_data)
+                        st.session_state.experimental_session.add_to_conversation_history(
+                            0, "system", "Round 0 completed - baseline concept map created", {"final": True}
+                        )
 
-                # Move to round 1
-                st.session_state.followup = False
-                st.session_state.roundn = 1
-                st.session_state.agent_msg = None
-                st.session_state.scroll_to_top = True
-                st.rerun()
-        return
+                    # Move to round 1
+                    st.session_state.followup = False
+                    st.session_state.roundn = 1
+                    st.session_state.agent_msg = None
+                    st.session_state.scroll_to_top = True
+                    st.rerun()
+            return
 
     # Initialize conversation state for this round
     round_key = f"round_{roundn}_conversation"
@@ -1078,8 +1131,8 @@ def render_followup():
                 # Reset conversation state for next round
                 st.session_state[conversation_turn_key] = 0
 
-                if is_olm_condition():
-                    # OLM: capture snapshot now (while cmdata[roundn] is guaranteed correct)
+                if is_olm_dashboard_condition():
+                    # OLM_dashboard: capture snapshot now (while cmdata[roundn] is guaranteed correct)
                     # then show dashboard before advancing to next round
                     st.session_state.olm_snapshot = copy.deepcopy(current_cm_data)
                     st.session_state.olm_dashboard_pending = True
@@ -1309,6 +1362,12 @@ def handle_response(response):
             st.session_state._prev_cm_edges = current_edges
 
     if st.session_state.submit_request and response and not st.session_state.followup:
+        # Guard: if the component returned empty elements, the frontend hasn't fired
+        # setComponentValue yet — wait for the next render cycle
+        if isinstance(response, dict) and not response.get("elements"):
+            logger.info("   ⏳ submit_request=True but elements empty — waiting for frontend setComponentValue")
+            return
+
         logger.info("   ✅ Processing response...")
 
         # Debug: Log what we received
@@ -1503,22 +1562,33 @@ def main():
             st.components.v1.html(scroll_js)
             return
 
+        # SUS questionnaire (experimental mode only, after CLT)
+        if (st.session_state.mode == "experimental" and
+                st.session_state.get('clt_completed', False) and
+                not st.session_state.get('sus_completed', False)):
+            if st.session_state.experimental_session:
+                st.session_state.experimental_session.render_sus_questionnaire()
+            st.components.v1.html(scroll_js)
+            return
+
         # Show summary page after all questionnaires are completed (or immediately in demo mode)
         render_summary_page()
     else:
-        render_header()
+        # OLM dashboard: shown as a standalone page between rounds
+        if st.session_state.get("olm_dashboard_pending", False):
+            render_olm_dashboard(st.session_state.roundn)
+        else:
+            render_header()
+            # Render concept map first
+            response = render_concept_map()
 
-        # Render concept map first
-        response = render_concept_map()
+            # Then render submit button
+            render_cm_submit_button()
 
+            handle_response(response)
 
-        # Then render submit button
-        render_cm_submit_button()
-
-        handle_response(response)
-
-        if st.session_state.followup:
-            render_followup()
+            if st.session_state.followup:
+                render_followup()
 
     if st.session_state.scroll_to_top:
         st.components.v1.html(scroll_js)
