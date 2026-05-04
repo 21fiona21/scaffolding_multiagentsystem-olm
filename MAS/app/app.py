@@ -58,6 +58,7 @@ def init_session_state():
         "olm_snapshot": None,
         "olm_metrics_by_round": {},  # metrics cached at submit time per round
         "olm_dashboard_shown_time": None,
+        "round_reflection_pending": False,
     }
 
     for key, value in defaults.items():
@@ -779,10 +780,12 @@ def render_concept_map():
     contents = st.session_state.contents
     cm_label = contents["labels"]["extend" if roundn else "initial"]["header"]
 
-    _, middle, right = st.columns([1, 20, 1])
-    with right:
-        if st.button(label='❓', type='secondary'):
-            render_help_dialog()
+    # _, middle, right = st.columns([1, 20, 1])
+    # with right:
+    #     if st.button(label='❓', type='secondary'):
+    #         render_help_dialog()
+    # with middle:
+    middle = st.container()
     with middle:
         st.write(cm_label)
 
@@ -900,12 +903,7 @@ def render_olm_dashboard(roundn: int) -> None:
     st.markdown("---")
     _, col_btn, _ = st.columns([1, 2, 1])
     with col_btn:
-        if roundn == 0:
-            next_label = "Proceed to Round 1"
-        elif roundn >= st.session_state.max_rounds - 1:
-            next_label = "Proceed"
-        else:
-            next_label = "Proceed to Next Round"
+        next_label = "Proceed"
         if st.button(next_label, type="primary", use_container_width=True,
                      key=f"olm_proceed_r{roundn}"):
             # Log how long the participant stayed on the dashboard
@@ -937,9 +935,59 @@ def render_olm_dashboard(roundn: int) -> None:
             st.session_state.olm_dashboard_shown_time = None
             st.session_state.olm_dashboard_pending = False
             st.session_state.olm_snapshot = None
+            st.session_state.round_reflection_pending = True
+            st.rerun()
+
+
+def render_round_reflection(roundn: int) -> None:
+    """Render the Round Reflection page with a single mental effort item (Paas scale)."""
+    st.title("Round Reflection")
+    st.markdown("---")
+    st.markdown("**How much mental effort did you invest in this round?**")
+    st.markdown("")
+
+    EFFORT_OPTIONS = {
+        1: "1 — Very, very low mental effort",
+        2: "2 — Very low mental effort",
+        3: "3 — Low mental effort",
+        4: "4 — Rather low mental effort",
+        5: "5 — Neither low nor high mental effort",
+        6: "6 — Rather high mental effort",
+        7: "7 — High mental effort",
+        8: "8 — Very high mental effort",
+        9: "9 — Very, very high mental effort",
+    }
+
+    rating = st.radio(
+        "Select your rating:",
+        options=list(EFFORT_OPTIONS.keys()),
+        format_func=lambda x: EFFORT_OPTIONS[x],
+        index=None,
+        key=f"round_reflection_r{roundn}",
+    )
+
+    st.markdown("---")
+    _, col_btn, _ = st.columns([1, 2, 1])
+    with col_btn:
+        if st.button("Proceed to Next Round", type="primary", use_container_width=True,
+                     key=f"round_reflection_submit_r{roundn}",
+                     disabled=(rating is None)):
+            session = st.session_state.get("experimental_session")
+            if session and session.session_logger:
+                session.session_logger.log_event(
+                    event_type="round_reflection_completed",
+                    metadata={
+                        "round": roundn,
+                        "mental_effort_rating": rating,
+                        "scale": "Paas (1992) 9-point mental effort scale",
+                        "timestamp": datetime.now().isoformat(),
+                        "experimental_condition": session.session_data.get("experimental_condition", "unknown"),
+                    }
+                )
+            st.session_state.round_reflection_pending = False
             st.session_state.followup = False
-            st.session_state.roundn = 1 if roundn == 0 else st.session_state.roundn + 1
             st.session_state.agent_msg = None
+            st.session_state.roundn = 1 if roundn == 0 else roundn + 1
             st.session_state.scroll_to_top = True
             st.rerun()
 
@@ -989,11 +1037,8 @@ def render_followup():
                             0, "system", "Round 0 completed - baseline concept map created", {"final": True}
                         )
 
-                    # Move to round 1
-                    st.session_state.followup = False
-                    st.session_state.roundn = 1
-                    st.session_state.agent_msg = None
-                    st.session_state.scroll_to_top = True
+                    # Show reflection before advancing to round 1
+                    st.session_state.round_reflection_pending = True
                     st.rerun()
             return
 
@@ -1138,11 +1183,8 @@ def render_followup():
                     st.session_state.olm_dashboard_pending = True
                     st.rerun()
                 else:
-                    # Move to next round
-                    st.session_state.followup = False
-                    st.session_state.roundn += 1
-                    st.session_state.agent_msg = None
-                    st.session_state.scroll_to_top = True
+                    # Show reflection before advancing to next round
+                    st.session_state.round_reflection_pending = True
                     st.rerun()
 
         with col3:
@@ -1532,21 +1574,21 @@ def main():
 
     # Check if all rounds are completed and post-task questionnaires are needed
     if roundn == st.session_state.max_rounds:
-        # Agent differentiation question (experimental mode only)
-        if (st.session_state.mode == "experimental" and
-                not st.session_state.get('agent_differentiation_completed', False)):
-            render_agent_differentiation_question()
-            return
-        # Map adaptation question (after differentiation)
-        if (st.session_state.mode == "experimental" and
-                st.session_state.get('agent_differentiation_completed', False) and
-                not st.session_state.get('map_adaptation_completed', False)):
-            render_map_adaption_question()
-            return
+        # Agent differentiation question — disabled, not relevant for current experiment
+        # if (st.session_state.mode == "experimental" and
+        #         not st.session_state.get('agent_differentiation_completed', False)):
+        #     render_agent_differentiation_question()
+        #     return
 
-        # Post-knowledge questionnaire (experimental mode only, after map adaptation - measure learning gains immediately)
+        # Map adaptation question — disabled, not relevant for current experiment
+        # if (st.session_state.mode == "experimental" and
+        #         st.session_state.get('agent_differentiation_completed', False) and
+        #         not st.session_state.get('map_adaptation_completed', False)):
+        #     render_map_adaption_question()
+        #     return
+
+        # Post-knowledge questionnaire (experimental mode only, directly after last round)
         if (st.session_state.mode == "experimental" and
-             st.session_state.get('map_adaptation_completed', False) and
              not st.session_state.get('post_questionnaire_completed', False)):
              if st.session_state.experimental_session:
                  st.session_state.experimental_session.render_post_knowledge_questionnaire()
@@ -1577,6 +1619,9 @@ def main():
         # OLM dashboard: shown as a standalone page between rounds
         if st.session_state.get("olm_dashboard_pending", False):
             render_olm_dashboard(st.session_state.roundn)
+        # Round reflection: shown after dashboard (OLM_dashboard) or directly after round (OLM_no_dashboard)
+        elif st.session_state.get("round_reflection_pending", False):
+            render_round_reflection(st.session_state.roundn)
         else:
             render_header()
             # Render concept map first
