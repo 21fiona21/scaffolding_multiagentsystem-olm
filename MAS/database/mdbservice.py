@@ -11,7 +11,7 @@ from MAS.database.dtos import *
 
 load_dotenv()
 def _construct_uri_from_env() -> str:
-    return f"mongodb+srv://{os.environ['MONGODB_MAS_NAME']}:{os.environ['MONGODB_MAS_KEY']}@mas.oxzqvr2.mongodb.net/?retryWrites=true&w=majority&appName=MAS"
+    return f"mongodb+srv://{os.environ['MONGODB_MAS_NAME']}:{os.environ['MONGODB_MAS_KEY']}@olm-multiagent-scaffold.swna7hk.mongodb.net/?retryWrites=true&w=majority&appName=olm-multiagent-scaffolding"
 
 logger = logging.getLogger(__name__)
 

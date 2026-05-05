@@ -194,7 +194,7 @@ def render_consent_form():
         ### Informed Consent for Research Participation
 
         You are being invited to participate in a research study titled **"Agentic AI for Higher Education"**. 
-        This study is being conducted by **Diana Kozachek** from the **University of St. Gallen, Switzerland**. 
+        This study is being conducted by **Fiona Berger** from the **University of St. Gallen, Switzerland**. 
         You were selected to participate in this study because you are an adult learner interested in educational technology.
 
         **Purpose of the Research:**
@@ -220,7 +220,7 @@ def render_consent_form():
 
         **Contact Information:**
         If you have questions about this project or if you have a research-related problem, you may contact the researcher, 
-        **Diana Kozachek** at the University of St. Gallen. If you have any questions concerning your rights as a research subject, 
+        **Fiona Berger** at the University of St. Gallen. If you have any questions concerning your rights as a research subject, 
         you may contact the University of Saint Gallen Ethics Committee.
 
         **Consent Statement:**
@@ -1179,7 +1179,7 @@ def render_followup():
                 if is_olm_dashboard_condition():
                     # OLM_dashboard: capture snapshot now (while cmdata[roundn] is guaranteed correct)
                     # then show dashboard before advancing to next round
-                    st.session_state.olm_snapshot = copy.deepcopy(current_cm_data)
+                    st.session_state.olm_snapshot = copy.deepcopy(st.session_state.cmdata[roundn])
                     st.session_state.olm_dashboard_pending = True
                     st.rerun()
                 else:
@@ -1402,6 +1402,12 @@ def handle_response(response):
             # Update tracked state
             st.session_state._prev_cm_nodes = current_nodes
             st.session_state._prev_cm_edges = current_edges
+
+    # During agent interaction, silently keep cmdata current so post-submit edits survive the round transition
+    if st.session_state.followup and isinstance(response, dict) and response.get("elements"):
+        roundn = st.session_state.roundn
+        ensure_cm_slot(roundn)
+        st.session_state.cmdata[roundn] = response
 
     if st.session_state.submit_request and response and not st.session_state.followup:
         # Guard: if the component returned empty elements, the frontend hasn't fired
