@@ -70,7 +70,7 @@ def init_session_state():
         initial_map = copy.deepcopy(st.session_state.contents["initial_map"])
         st.session_state.cmdata = [initial_map]
 
-    # Set max rounds (now 5 total: round 1 + 4 scaffolding rounds)
+    # Set max rounds (now 4 total: round 1 + 3 scaffolding rounds)
     if 'max_rounds' not in st.session_state:
         st.session_state.max_rounds = 4  # Round 0 (baseline) + 3 scaffolding rounds (procedural skipped)
 
@@ -178,7 +178,7 @@ def render_mode_selection():
     st.info("""
     🔎 **Study Details**
 
-    - Duration: Approximately 45 minutes
+    - Duration: Approximately 40 minutes
     - Platform: Web-based (works on desktop)
     - Data: Fully anonymized for research purposes
     - Institution: University of St. Gallen, Switzerland
@@ -695,7 +695,10 @@ def render_summary_page():
 
     # Leading back to Prolific
     st.markdown("---")
-    st.link_button("Please return to Prolific", "https://app.prolific.com/submissions/complete?cc=C1EF9RLL", type="primary")
+    st.error("""
+    **ATTENTION:** Please click the button below to return to Prolific. This is required for your participation to be **recorded as completed** and for you to **receive payment**.
+    """)
+    st.link_button("Please return to Prolific", "https://app.prolific.com/submissions/complete?cc=BAG5752F", type="primary")
 
 
 def render_agent_name():
