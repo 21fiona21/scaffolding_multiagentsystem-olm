@@ -51,9 +51,9 @@ AGENT_SEQUENCES = {
     'CG_WRONG_SEQ': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
     'CG_NEUTRAL': ["neutral", "neutral", "neutral", "neutral"],
     # OLM_dashboard: scaffolding + OLM dashboard shown after each round
-    'OLM_dashboard': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
+    'OLM_dashboard': ["metacognitive_scaffolding", "strategic_scaffolding", "conceptual_scaffolding"],  # "procedural_scaffolding" removed — experiment shortened
     # OLM_no_dashboard: same scaffolding, no dashboard shown
-    'OLM_no_dashboard': ["metacognitive_scaffolding", "strategic_scaffolding", "procedural_scaffolding", "conceptual_scaffolding"],
+    'OLM_no_dashboard': ["metacognitive_scaffolding", "strategic_scaffolding", "conceptual_scaffolding"],  # "procedural_scaffolding" removed — experiment shortened
 }
 
 
@@ -1191,8 +1191,8 @@ class StreamlitExperimentalSession:
                     "experimental_condition": experimental_condition,
                     "participant_id": self.session_data["learner_profile"].get("name", "unknown"),
                     "sequence_type": "experimental_condition_based",
-                    "total_rounds": 5,  # Including round 0
-                    "note": f"Round 0 is baseline (no scaffolding), followed by 4 rounds with {experimental_condition} condition"
+                    "total_rounds": 4,  # Including round 0 (procedural round removed)
+                    "note": f"Round 0 is baseline (no scaffolding), followed by 3 rounds with {experimental_condition} condition"
                 }
             )
         

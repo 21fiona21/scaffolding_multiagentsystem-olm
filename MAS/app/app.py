@@ -72,7 +72,7 @@ def init_session_state():
 
     # Set max rounds (now 5 total: round 1 + 4 scaffolding rounds)
     if 'max_rounds' not in st.session_state:
-        st.session_state.max_rounds = 5  # Round 1 + 4 scaffolding rounds
+        st.session_state.max_rounds = 4  # Round 0 (baseline) + 3 scaffolding rounds (procedural skipped)
 
 
 def load_contents():
@@ -130,11 +130,31 @@ def render_mode_selection():
     st.info(
         "**Topic:** International market entry challenges for a German software start-up under the Adaptive Market Gatekeeping (AMG) standard.")
 
-    # Task description and resources information
-    st.success("""
-    📋 **Task Description & Resources:**
+    # Requirements
+    st.warning("""
+    ✅ **Requirements:**          
 
-    This study examines the helpfulness of chatbot instructions in learning. During the experiment, you will have continuous access to:
+    - **18+** years old
+    - **DESKTOP ONLY**
+    - **ENGLISH SPEAKER**
+    - **40 minutes** of focused attention
+    - Complete all tasks in one session (no page refreshing)
+    - Use only provided materials (no external AI assistance please, we try to test out own solution)
+    """)
+
+    # Task description and resources information
+    st.info("""
+    📋 **Task Description & Resources:**
+               
+    **ENGLISH SPEAKERS ON DESKTOP ONLY!** Participate in a research study examining how AI chatbots can enhance learning during concept mapping. You will create visual concept maps about international business market entry while receiving personalized guidance from AI agents.           
+
+    What You'll Do:
+    - Complete a brief profile questionnaire (5 minutes)
+    - Create and refine concept maps across 4 rounds (25 minutes)
+    - Interact with AI chatbots that provide learning guidance
+    - Answer short questionnaires about your experience (5 minutes)
+                                    
+    During the experiment, you will have continuous access to:
     - **Task Description**: The specific problem you need to solve through concept mapping
     - **Extra Materials**: Additional resources to help you understand the topic
     - **Aid and Instructions**: From round 1 on, you can interact with a chatbot that assists you in improving your map
@@ -143,17 +163,27 @@ def render_mode_selection():
     Your task is to create and refine a concept map that represents your understanding of the problem described in these materials with the help of the chatbot.
     """)
 
-    # Add time information
-    st.warning("""
-    ⏱️ **Expected Duration:**
-    - Total experiment time: **Approximately 45 minutes**
-    - 5 rounds of concept mapping: **5 minutes per round**
-    - Additional time for questionnaires and profile setup
-    - Your time will be tracked for research purposes
+    # Participation rewards
+    st.success("""
+    💰 **Compensation & Bonus**
 
-    ⚠️ **Important:** Please complete all steps in order. Experimental data will only be logged after all required items are filled out. 
-    Your careful participation ensures the validity of our research data. The top 10 percent of participants will receive a financial bonus.
+    What You'll receive:         
+    - Base Payment
+    - **Performance Bonus:** Top 10% of participants receive additional financial compensation of 10%
+    - Learning Experience: Gain knowledge about international business strategies
+    - AI Interaction: Experience cutting-edge educational AI technology
     """)
+
+    # Details
+    st.info("""
+    🔎 **Study Details**
+
+    - Duration: Approximately 45 minutes
+    - Platform: Web-based (works on desktop)
+    - Data: Fully anonymized for research purposes
+    - Institution: University of St. Gallen, Switzerland
+    """)
+
 
     st.markdown("**Ready to begin the experiment?**")
 
@@ -166,7 +196,7 @@ def render_mode_selection():
         This research study includes:
         - **AI-powered personalized learning**
         - **Learner profiling questionnaire**
-        - **5 rounds of concept mapping**
+        - **4 rounds of concept mapping**
         - **Data collection for research purposes**
         """)
 
@@ -219,9 +249,7 @@ def render_consent_form():
         Your participation in this study is completely voluntary and you can withdraw at any time. 
 
         **Contact Information:**
-        If you have questions about this project or if you have a research-related problem, you may contact the researcher, 
-        **Fiona Berger** at the University of St. Gallen. If you have any questions concerning your rights as a research subject, 
-        you may contact the University of Saint Gallen Ethics Committee.
+        If you have questions about this project or experience any issues during the study, you may contact the researcher, **Fiona Berger**, via the Prolific messaging system.
 
         **Consent Statement:**
         By clicking "I agree" below you are indicating that you are at least 18 years old, have read and understood this 
@@ -309,9 +337,9 @@ def render_learner_profile():
 
         st.info("📋 **Experiment Structure:**")
         st.write("**Round 0:** Initial Map Creation (No agent) - Baseline")
-        st.write("**Rounds 1-4:** Agent-guided mapping sessions")
+        st.write("**Rounds 1-3:** Agent-guided mapping sessions")
         st.write("")
-        st.write("You will receive guidance from AI agents across 4 rounds to help improve your concept map.")
+        st.write("You will receive guidance from AI agents across 3 rounds to help improve your concept map.")
 
         st.markdown("---")
         st.info("📝 Next, you'll complete a pre-knowledge questionnaire about the task materials.")
@@ -636,7 +664,7 @@ def render_summary_page():
             if st.session_state.mode == "experimental":
                 st.write("**Session Structure:**")
                 st.write("- Round 0: Baseline (own map)")
-                st.write("- Rounds 1-4: Agent-guided map")
+                st.write("- Rounds 1-3: Agent-guided map")
 
     # Display concept map statistics
     st.markdown("---")
@@ -877,35 +905,152 @@ def render_olm_dashboard(roundn: int) -> None:
     st.caption(f"Round {roundn} snapshot (as submitted)")
 
     m = compute_olm_metrics(roundn)
+    prev = compute_olm_metrics(roundn - 1) if roundn > 0 else None
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric(
-        label="Number of Concepts",
-        value=m["node_count"],
-        help="The total number of concepts currently included in your concept map.",
-    )
-    col2.metric(
-        label="Number of Connections",
-        value=m["edge_count"],
-        help="The total number of connections linking concepts in your map.",
-    )
-    col3.metric(
-        label="Connectivity",
-        value=m["connectivity_ratio"],
-        help="The ratio of connections to concepts, indicating how strongly concepts are linked.",
-    )
-    col4.metric(
-        label="Unconnected Concepts",
-        value=m["isolated_count"],
-        help="The number of concepts that are not connected to any other concept.",
-    )
+    def _delta_html(current, previous, reverse: bool = False, decimals: int = 0) -> str:
+        """Return a small colored delta line, or empty string if no previous data."""
+        if previous is None:
+            return ""
+        diff = round(current - previous, decimals) if decimals else current - previous
+        fmt = f".{decimals}f" if decimals else ""
+        if diff > 0:
+            label = f"+{diff:{fmt}}"
+            color = "#c0392b" if reverse else "#27ae60"
+        elif diff < 0:
+            label = f"{diff:{fmt}}"
+            color = "#27ae60" if reverse else "#c0392b"
+        else:
+            label = "±0"
+            color = "#d4a017"
+        return (
+            f'<p style="font-size:0.8rem; color:{color}; margin:2px 0 0 0; font-weight:600;">'
+            f'<span style="font-size:1.1rem;">{label}</span> vs. previous round</p>'
+        )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            label="Number of Concepts",
+            value=m["node_count"],
+            help="The total number of concepts currently included in your concept map.",
+        )
+        st.markdown(_delta_html(m["node_count"], prev["node_count"] if prev else None), unsafe_allow_html=True)
+    with col2:
+        st.metric(
+            label="Number of Connections",
+            value=m["edge_count"],
+            help="The total number of connections linking concepts in your map.",
+        )
+        st.markdown(_delta_html(m["edge_count"], prev["edge_count"] if prev else None), unsafe_allow_html=True)
+    with col3:
+        st.metric(
+            label="Unconnected Concepts",
+            value=m["isolated_count"],
+            help="The number of concepts that are not connected to any other concept.",
+        )
+        st.markdown(_delta_html(m["isolated_count"], prev["isolated_count"] if prev else None, reverse=True), unsafe_allow_html=True)
 
     st.markdown("---")
+
+    ratio = m["connectivity_ratio"]
+    if ratio < 0.8:
+        color = "#c0392b"
+    elif ratio < 1.2:
+        color = "#d4a017"
+    else:
+        color = "#27ae60"
+
+    ratio_delta_html = _delta_html(
+        m["connectivity_ratio"],
+        prev["connectivity_ratio"] if prev else None,
+        decimals=2,
+    )
+
+    _, col_ratio, _ = st.columns([1, 2, 1])
+    with col_ratio:
+        st.markdown(f"""
+        <div style="padding: 0.5rem 0 0.75rem 0;">
+            <p style="font-size:0.875rem; color:rgb(49,51,63); margin:0 0 0.25rem 0; font-weight:400;">
+                Connectivity Ratio
+                <span title="The ratio of connections to concepts, indicating how strongly concepts are linked."
+                      style="cursor:help; color:rgb(150,150,150); font-size:0.8rem; margin-left:4px;">&#9432;</span>
+            </p>
+            <p style="font-size:2.25rem; font-weight:700; color:{color}; margin:0; line-height:1.2;">{ratio}</p>
+            {ratio_delta_html}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    GATE_SECONDS = 15
+    shown_time = st.session_state.get("olm_dashboard_shown_time")
+    elapsed = (datetime.now() - datetime.fromisoformat(shown_time)).total_seconds() if shown_time else GATE_SECONDS
+    remaining = max(0, GATE_SECONDS - int(elapsed))
+
     _, col_btn, _ = st.columns([1, 2, 1])
     with col_btn:
-        next_label = "Proceed"
-        if st.button(next_label, type="primary", use_container_width=True,
-                     key=f"olm_proceed_r{roundn}"):
+        # Always render one button; JS handles the visual gate so no reruns are needed
+        proceed_clicked = st.button("Proceed", type="primary", use_container_width=True,
+                                    key=f"olm_proceed_r{roundn}")
+
+        if remaining > 0:
+            st.components.v1.html(f"""
+                <style>body{{margin:0;font-family:sans-serif;}}</style>
+                <div id="gate-msg" style="margin-top:6px;padding:0.6rem 1rem;background:#eef6fb;
+                     border-left:4px solid #3498db;border-radius:4px;color:#2471a3;font-size:0.85rem;">
+                    Please examine your dashboard carefully.
+                    You can proceed in <strong id="cnt">{remaining}</strong> second{'s' if remaining != 1 else ''}...
+                </div>
+                <script>
+                    var r = {remaining};
+
+                    function findBtn() {{
+                        var btns = window.parent.document.querySelectorAll('button');
+                        for (var i = 0; i < btns.length; i++) {{
+                            if (btns[i].textContent.trim() === 'Proceed') return btns[i];
+                        }}
+                        return null;
+                    }}
+
+                    function applyGate(btn) {{
+                        btn.style.pointerEvents = 'none';
+                        btn.style.opacity = '0.45';
+                        btn.style.cursor = 'not-allowed';
+                    }}
+
+                    function removeGate(btn) {{
+                        btn.style.pointerEvents = '';
+                        btn.style.opacity = '';
+                        btn.style.cursor = '';
+                    }}
+
+                    var btn = null;
+                    var attempts = 0;
+                    function init() {{
+                        btn = findBtn();
+                        if (!btn && ++attempts < 30) {{ setTimeout(init, 100); return; }}
+                        if (btn) applyGate(btn);
+                        tick();
+                    }}
+
+                    function tick() {{
+                        r--;
+                        var el = document.getElementById('cnt');
+                        var msg = document.getElementById('gate-msg');
+                        if (r > 0) {{
+                            if (el) el.textContent = r;
+                            setTimeout(tick, 1000);
+                        }} else {{
+                            if (msg) msg.style.display = 'none';
+                            if (btn) removeGate(btn);
+                        }}
+                    }}
+
+                    init();
+                </script>
+            """, height=55)
+
+        if proceed_clicked and remaining == 0:
             # Log how long the participant stayed on the dashboard
             dismissed_time = datetime.now().isoformat()
             shown_time = st.session_state.get("olm_dashboard_shown_time")
