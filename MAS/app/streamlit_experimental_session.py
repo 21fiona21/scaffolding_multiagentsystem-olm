@@ -8,6 +8,7 @@ providing the same research-grade functionality through a web interface.
 import os
 import sys
 import json
+import copy
 import random
 import logging
 import hashlib
@@ -2117,22 +2118,25 @@ class StreamlitExperimentalSession:
             experimental_data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "experimental_data")
             os.makedirs(experimental_data_dir, exist_ok=True)
             
-            # JSON export (complete session data)
+            # Export session data to the database FIRST (insert_one mutates the dict
+            # it receives by injecting _id: ObjectId, so we pass a deep copy to keep
+            # session_data clean for the JSON export that follows)
+            if self.db_service:
+                self.db_service.insert_session(copy.deepcopy(self.session_data))
+
+            # JSON export (complete session data – must come after DB insert so that
+            # session_data is not yet contaminated with a bson ObjectId)
             json_filename = f"experimental_session_{participant_name}_{timestamp}.json"
             json_filepath = os.path.join(experimental_data_dir, json_filename)
-            
+
             with open(json_filepath, 'w', encoding='utf-8') as f:
                 json.dump(self.session_data, f, indent=2, ensure_ascii=False)
-            
+
             # CSV export (flattened for analysis)
             csv_filename = f"experimental_results_{participant_name}_{timestamp}.csv"
             csv_filepath = os.path.join(experimental_data_dir, csv_filename)
-            
-            self._export_csv_data(csv_filepath)
 
-            # Export session data to the database
-            if self.db_service:
-                self.db_service.insert_session(self.session_data)
+            self._export_csv_data(csv_filepath)
 
             return {
                 "json_file": json_filepath,
