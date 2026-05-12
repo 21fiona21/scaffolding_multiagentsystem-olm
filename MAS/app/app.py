@@ -121,13 +121,6 @@ def render_mode_selection():
     st.header(STUDY_TITLE)
     st.markdown("---")
 
-    # ── TEMPORARY DEBUG – remove before go-live ──────────────────────────────
-    with st.expander("🔧 DEBUG: URL / Prolific param check (remove before go-live)"):
-        st.write("**Raw st.query_params:**", dict(st.query_params))
-        st.write("**session_state.prolific_pid:**", st.session_state.get("prolific_pid"))
-        st.write("**session_state.prolific_study_id:**", st.session_state.get("prolific_study_id"))
-        st.write("**session_state.prolific_session_id:**", st.session_state.get("prolific_session_id"))
-    # ─────────────────────────────────────────────────────────────────────────
 
     # Add page refresh warning at the top
     st.error("""
@@ -650,13 +643,6 @@ def render_summary_page():
 
     # Finalize session if not already done
     if not st.session_state.session_finalized and st.session_state.experimental_session:
-        # ── TEMPORARY DEBUG ──────────────────────────────────────────────────
-        sd = st.session_state.experimental_session.session_data
-        st.write("🔧 DEBUG pre-save prolific fields:",
-                 {"prolific_pid": sd.get("prolific_pid"),
-                  "prolific_study_id": sd.get("prolific_study_id"),
-                  "prolific_session_id": sd.get("prolific_session_id")})
-        # ─────────────────────────────────────────────────────────────────────
         with st.spinner("Finalizing session and saving data..."):
             export_info = st.session_state.experimental_session.finalize_session()
             st.session_state.session_finalized = True
