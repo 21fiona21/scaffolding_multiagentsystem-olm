@@ -706,7 +706,7 @@ def render_summary_page():
     st.error("""
     **ATTENTION:** Please click the button below to return to Prolific. This is required for your participation to be **recorded as completed** and for you to **receive payment**.
     """)
-    st.link_button("Please return to Prolific", "https://app.prolific.com/submissions/complete?cc=BAG5752F", type="primary")
+    st.link_button("Please return to Prolific", "https://app.prolific.com/submissions/complete?cc=C12ILFBL", type="primary")
 
 
 def render_agent_name():
