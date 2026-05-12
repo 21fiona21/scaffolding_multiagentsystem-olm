@@ -62,13 +62,12 @@ class StreamlitExperimentalSession:
     
     def __init__(self):
         self.system = None
-        params = st.query_params
         self.session_data = {
             "session_id": f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             "start_time": datetime.now().isoformat(),
-            "prolific_pid": params.get("PROLIFIC_PID"),
-            "prolific_study_id": params.get("STUDY_ID"),
-            "prolific_session_id": params.get("SESSION_ID"),
+            "prolific_pid": st.session_state.get("prolific_pid"),
+            "prolific_study_id": st.session_state.get("prolific_study_id"),
+            "prolific_session_id": st.session_state.get("prolific_session_id"),
             "learner_profile": {},
             "agent_sequence": [],
             "used_agents": [],

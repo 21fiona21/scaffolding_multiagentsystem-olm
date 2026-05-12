@@ -28,6 +28,13 @@ def init_session_state():
     if 'scroll_to_top' not in st.session_state:
         st.session_state.scroll_to_top = False
 
+    # Capture Prolific URL params on first load (query_params are only reliable in main script context)
+    if 'prolific_pid' not in st.session_state:
+        params = st.query_params
+        st.session_state.prolific_pid = params.get("PROLIFIC_PID")
+        st.session_state.prolific_study_id = params.get("STUDY_ID")
+        st.session_state.prolific_session_id = params.get("SESSION_ID")
+
 
     # Initialize other defaults
     defaults = {
