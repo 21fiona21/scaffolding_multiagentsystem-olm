@@ -121,6 +121,14 @@ def render_mode_selection():
     st.header(STUDY_TITLE)
     st.markdown("---")
 
+    # ── TEMPORARY DEBUG – remove before go-live ──────────────────────────────
+    with st.expander("🔧 DEBUG: URL / Prolific param check (remove before go-live)"):
+        st.write("**Raw st.query_params:**", dict(st.query_params))
+        st.write("**session_state.prolific_pid:**", st.session_state.get("prolific_pid"))
+        st.write("**session_state.prolific_study_id:**", st.session_state.get("prolific_study_id"))
+        st.write("**session_state.prolific_session_id:**", st.session_state.get("prolific_session_id"))
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Add page refresh warning at the top
     st.error("""
     🚫 **DO NOT REFRESH THE PAGE** 
