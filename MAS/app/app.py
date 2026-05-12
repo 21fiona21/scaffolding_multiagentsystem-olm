@@ -650,6 +650,13 @@ def render_summary_page():
 
     # Finalize session if not already done
     if not st.session_state.session_finalized and st.session_state.experimental_session:
+        # ── TEMPORARY DEBUG ──────────────────────────────────────────────────
+        sd = st.session_state.experimental_session.session_data
+        st.write("🔧 DEBUG pre-save prolific fields:",
+                 {"prolific_pid": sd.get("prolific_pid"),
+                  "prolific_study_id": sd.get("prolific_study_id"),
+                  "prolific_session_id": sd.get("prolific_session_id")})
+        # ─────────────────────────────────────────────────────────────────────
         with st.spinner("Finalizing session and saving data..."):
             export_info = st.session_state.experimental_session.finalize_session()
             st.session_state.session_finalized = True
